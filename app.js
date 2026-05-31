@@ -992,30 +992,42 @@ function calculateStats(records) {
   return { count: total, accuracy, avgTime, trendAcc, trendTime };
 }
 
-async function fetchAreaProficiency(userName, grade, semester, month) {
-  const key = getCurriculumKey(grade, semester, month);
-  const curriculum = curriculumMap[key];
-  if (!curriculum) return [];
-
+async function fetchAreaProficiency(userName, grade) {
   const result = [];
+  const semesters = [1, 2];
   
-  for (const area of curriculum.areas) {
-    let diff = '하';
-    let progress = 20; // default indicator width
-
-    // Filter records in our loaded cache
-    const matching = state.historyCache.filter(r => r.area === area);
-    if (matching.length > 0) {
-      // Find latest difficulty
-      diff = matching[0].difficulty;
-      const count = matching.length;
-      const correct = matching.filter(r => r.is_correct).length;
-      progress = Math.round((correct / count) * 100);
+  for (const sem of semesters) {
+    const months = sem === 1 ? [3, 4, 5, 6, 7] : [9, 10, 11, 12];
+    for (const month of months) {
+      const key = getCurriculumKey(grade, sem, month);
+      const curriculum = curriculumMap[key];
+      if (curriculum) {
+        for (const area of curriculum.areas) {
+          let diff = '하';
+          let progress = 20; // default indicator width
+          
+          // Filter records in our loaded cache
+          const matching = state.historyCache.filter(r => r.area === area && r.grade === grade);
+          if (matching.length > 0) {
+            // Find latest difficulty
+            diff = matching[0].difficulty;
+            const count = matching.length;
+            const correct = matching.filter(r => r.is_correct).length;
+            progress = Math.round((correct / count) * 100);
+          }
+          
+          result.push({
+            area,
+            semester: sem,
+            month,
+            difficulty: diff,
+            progress
+          });
+        }
+      }
     }
-
-    result.push({ area, difficulty: diff, progress });
   }
-
+  
   return result;
 }
 
@@ -1050,17 +1062,42 @@ function saveLocalHistory(userName, record) {
   localStorage.setItem(`calcal_history_${userName}`, JSON.stringify(history));
 }
 
-// 6. Growth Chart Dashboard Renderer (Canvas API)
+// 6. Growth Chart Dashboard Renderer (Canvas API - Daily Averages & Difficulty Summaries)
 function renderGrowthChart(history) {
   const canvas = document.getElementById('analytics-chart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   
-  // Set dimensions correctly for high-DPI displays
   const width = canvas.width;
   const height = canvas.height;
   
   ctx.clearRect(0, 0, width, height);
+
+  // Group by difficulty and display in the container
+  const diffs = ['하', '중', '상'];
+  const diffStatsContainer = document.getElementById('difficulty-summary-stats');
+  if (diffStatsContainer) {
+    diffStatsContainer.innerHTML = '';
+    diffs.forEach(d => {
+      const matching = history.filter(r => r.difficulty === d);
+      const badge = document.createElement('div');
+      const badgeClass = d === '상' ? 'badge-diff-high' : (d === '중' ? 'badge-diff-med' : 'badge-diff-low');
+      
+      if (matching.length > 0) {
+        const correctCount = matching.filter(r => r.is_correct).length;
+        const accuracy = Math.round((correctCount / matching.length) * 100);
+        const totalTime = matching.reduce((sum, r) => sum + r.time_spent_ms, 0);
+        const avgTime = Math.round((totalTime / matching.length) / 100) / 10;
+        
+        badge.className = `diff-summary-badge ${badgeClass}`;
+        badge.innerHTML = `<strong>${d}</strong>: ${accuracy}% / ${avgTime.toFixed(1)}초`;
+      } else {
+        badge.className = `diff-summary-badge ${badgeClass} empty-badge`;
+        badge.innerHTML = `<strong>${d}</strong>: 기록 없음`;
+      }
+      diffStatsContainer.appendChild(badge);
+    });
+  }
 
   // If no history, draw background placeholder
   if (!history || history.length === 0) {
@@ -1068,13 +1105,35 @@ function renderGrowthChart(history) {
     ctx.font = '500 14px Noto Sans KR';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('문제를 몇 번 풀면 여기에 성장 그래프가 그려집니다!', width / 2, height / 2);
+    ctx.fillText('문제를 풀면 여기에 성장 그래프가 그려집니다!', width / 2, height / 2);
     return;
   }
 
-  // Slice last 15 attempts and reverse so they are chronological (left to right)
-  const data = history.slice(0, 15).reverse();
-  const count = data.length;
+  // Group records by Date (local timezone)
+  const dailyGroups = {};
+  history.forEach(r => {
+    const dateObj = new Date(r.created_at);
+    const label = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`; // format like "5/31"
+    
+    if (!dailyGroups[label]) {
+      dailyGroups[label] = {
+        correctCount: 0,
+        totalCount: 0,
+        totalTimeMs: 0
+      };
+    }
+    
+    dailyGroups[label].totalCount++;
+    if (r.is_correct) {
+      dailyGroups[label].correctCount++;
+    }
+    dailyGroups[label].totalTimeMs += r.time_spent_ms;
+  });
+
+  // Extract and reverse keys to chronological order (past to present)
+  const sortedDates = Object.keys(dailyGroups).reverse();
+  const displayDates = sortedDates.slice(-10); // get last 10 practice days
+  const count = displayDates.length;
 
   // Layout boundaries
   const paddingLeft = 40;
@@ -1103,12 +1162,14 @@ function renderGrowthChart(history) {
     ctx.fillText(`${100 - i * 25}%`, paddingLeft - 8, y);
   }
 
-  const getX = (index) => paddingLeft + (chartWidth / Math.max(1, count - 1)) * index;
+  // Calculate coordinates
+  const getX = (index) => {
+    if (count <= 1) return paddingLeft + chartWidth / 2;
+    return paddingLeft + (chartWidth / (count - 1)) * index;
+  };
   
   // Y scaling
-  // Accuracy: 0 to 100
   const getAccY = (accVal) => paddingTop + chartHeight - (chartHeight * accVal) / 100;
-  // Speed: 0 to max speed (let's say cap at 10 seconds for visual balance)
   const maxSeconds = 10;
   const getSpeedY = (speedMs) => {
     const seconds = speedMs / 1000;
@@ -1118,9 +1179,11 @@ function renderGrowthChart(history) {
 
   // 1. Draw ACCURACY LINE (Solid Purple)
   ctx.beginPath();
-  data.forEach((r, idx) => {
+  displayDates.forEach((date, idx) => {
+    const group = dailyGroups[date];
+    const avgAcc = (group.correctCount / group.totalCount) * 100;
     const x = getX(idx);
-    const y = getAccY(r.is_correct ? 100 : 0); // discrete in history, but maps well to rolling curves
+    const y = getAccY(avgAcc);
     if (idx === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -1129,9 +1192,11 @@ function renderGrowthChart(history) {
   ctx.stroke();
 
   // Dots for accuracy
-  data.forEach((r, idx) => {
+  displayDates.forEach((date, idx) => {
+    const group = dailyGroups[date];
+    const avgAcc = (group.correctCount / group.totalCount) * 100;
     const x = getX(idx);
-    const y = getAccY(r.is_correct ? 100 : 0);
+    const y = getAccY(avgAcc);
     ctx.beginPath();
     ctx.arc(x, y, 4.5, 0, 2 * Math.PI);
     ctx.fillStyle = '#6366F1';
@@ -1143,9 +1208,11 @@ function renderGrowthChart(history) {
 
   // 2. Draw SPEED LINE (Solid Cyan)
   ctx.beginPath();
-  data.forEach((r, idx) => {
+  displayDates.forEach((date, idx) => {
+    const group = dailyGroups[date];
+    const avgTimeMs = group.totalTimeMs / group.totalCount;
     const x = getX(idx);
-    const y = getSpeedY(r.time_spent_ms);
+    const y = getSpeedY(avgTimeMs);
     if (idx === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -1154,9 +1221,11 @@ function renderGrowthChart(history) {
   ctx.stroke();
 
   // Dots for speed
-  data.forEach((r, idx) => {
+  displayDates.forEach((date, idx) => {
+    const group = dailyGroups[date];
+    const avgTimeMs = group.totalTimeMs / group.totalCount;
     const x = getX(idx);
-    const y = getSpeedY(r.time_spent_ms);
+    const y = getSpeedY(avgTimeMs);
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, 2 * Math.PI);
     ctx.fillStyle = '#06B6D4';
@@ -1166,14 +1235,14 @@ function renderGrowthChart(history) {
     ctx.stroke();
   });
 
-  // Bottom Label X Axis (Attempts)
+  // Bottom Label X Axis (Dates)
   ctx.fillStyle = 'var(--text-muted)';
-  ctx.font = '600 8px Outfit';
+  ctx.font = '600 8.5px Outfit';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  data.forEach((r, idx) => {
+  displayDates.forEach((date, idx) => {
     const x = getX(idx);
-    ctx.fillText(`#${idx + 1}`, x, paddingTop + chartHeight + 8);
+    ctx.fillText(date, x, paddingTop + chartHeight + 8);
   });
 }
 
@@ -1327,8 +1396,8 @@ async function updateDashboardData() {
     curriculumText.textContent = '연산 과정이 등록되지 않았습니다.';
   }
 
-  // 5. Render areas proficiency progress bars
-  const profs = await fetchAreaProficiency(userName, state.currentGrade, state.currentSemester, state.currentMonth);
+  // 5. Render areas proficiency progress bars (Grade-wide Goals)
+  const profs = await fetchAreaProficiency(userName, state.currentGrade);
   
   profContainer.innerHTML = '';
   if (profs.length === 0) {
@@ -1342,8 +1411,8 @@ async function updateDashboardData() {
       el.className = 'prof-item';
       el.innerHTML = `
         <div class="prof-header">
-          <span class="prof-title">${p.area}</span>
-          <span class="prof-badge ${badgeClass}">권장 난이도: ${p.difficulty}</span>
+          <span class="prof-title">${p.area} <span class="prof-month-label">(${p.semester}학기 ${p.month}월)</span></span>
+          <span class="prof-badge ${badgeClass}">권장: ${p.difficulty}</span>
         </div>
         <div class="prof-bar-container">
           <div class="prof-bar-fill ${fillClass}" style="width: ${p.progress}%"></div>

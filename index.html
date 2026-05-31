@@ -131,8 +131,8 @@
           </div>
         </div>
 
-        <!-- Quick Stats Card -->
-        <div class="dashboard-card glass-panel flex-row-stats col-span-2">
+        <!-- Quick Stats Card (Left Half) -->
+        <div class="dashboard-card glass-panel flex-row-stats compact-stats-panel">
           <div class="stat-box">
             <span class="stat-label">총 푼 문제수</span>
             <span class="stat-value" id="stat-total-solved">0</span>
@@ -152,36 +152,41 @@
           </div>
         </div>
 
-        <!-- Math Area Proficiency Card -->
+        <!-- Launch CTA Card (Right Half) -->
+        <div class="dashboard-card glass-panel start-learning-panel compact-cta-panel">
+          <div class="cta-content">
+            <h3 class="cta-title">오늘의 연산 훈련을 시작해 볼까요? ⚡️</h3>
+            <p class="cta-subtitle">개인 맞춤형 지능형 난이도로 즉시 실시간 트레이닝을 진행합니다.</p>
+          </div>
+          <button id="start-learning-btn" class="primary-btn pulse-glow wide-btn">연산 트레이닝 시작! 🚀</button>
+        </div>
+
+        <!-- Math Area Grade-wide Goals Card (Left Column) -->
         <div class="dashboard-card glass-panel">
-          <h3 class="card-title">분야별 학습 수준</h3>
-          <p class="card-subtitle">최근 정답률에 따라 상·중·하 난이도가 자동 조절됩니다.</p>
-          <div class="proficiency-list" id="proficiency-container">
+          <h3 class="card-title">학년 전체 연산 목표 및 수준</h3>
+          <p class="card-subtitle">선택한 학년 전체에 달성해야 할 연산 목표와 현재 성취 수준입니다.</p>
+          <div class="proficiency-list scrollable-prof-list" id="proficiency-container">
             <!-- Dynamically populated -->
             <div class="loading-spinner-small"></div>
           </div>
         </div>
 
-        <!-- Analytics Visual Curve -->
+        <!-- Analytics Visual Curve Card (Right Column) -->
         <div class="dashboard-card glass-panel">
-          <h3 class="card-title">성장 분석 그래프</h3>
-          <p class="card-subtitle">최근 15회의 정답률과 속도(초)의 상관 관계 추이</p>
+          <div class="chart-header-group">
+            <h3 class="card-title">일별 성장 분석 그래프</h3>
+            <div class="difficulty-summary-container" id="difficulty-summary-stats">
+              <!-- Dynamically populated overall diff averages -->
+            </div>
+          </div>
+          <p class="card-subtitle">최근 학습일 기준 일별 평균 정답률과 속도 추이</p>
           <div class="chart-container">
             <canvas id="analytics-chart" width="400" height="200"></canvas>
             <div class="chart-legend">
-              <span class="legend-item"><span class="legend-color color-acc"></span>정답률 (%)</span>
-              <span class="legend-item"><span class="legend-color color-speed"></span>풀이 시간 (초)</span>
+              <span class="legend-item"><span class="legend-color color-acc"></span>일별 평균 정답률 (%)</span>
+              <span class="legend-item"><span class="legend-color color-speed"></span>일별 평균 풀이 시간 (초)</span>
             </div>
           </div>
-        </div>
-
-        <!-- Big Launch CTA -->
-        <div class="dashboard-card glass-panel col-span-2 start-learning-panel">
-          <div class="cta-content">
-            <h3 class="cta-title">오늘의 연산 훈련을 시작해 볼까요? ⚡️</h3>
-            <p class="cta-subtitle">빠른 속도와 높은 정확도로 기록에 도전해 보세요! 동기부여를 위한 분석 리포트가 즉각 갱신됩니다.</p>
-          </div>
-          <button id="start-learning-btn" class="primary-btn pulse-glow">연산 트레이닝 시작! 🚀</button>
         </div>
 
       </div>
