@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CalCal (칼칼) - 초등학교 연산 비결</title>
+  <!-- SEO & Performance Optimization -->
+  <meta name="description" content="초등학교 1학년부터 6학년까지, 개인 맞춤형 난이도 조절과 실시간 속도 분석으로 수학 연산 실력을 극적으로 향상시키는 프리미엄 웹 학습 프로그램">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Floating Toast Notifications -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- Header Section -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo-group">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="3" width="18" height="18" rx="4" fill="url(#logo-grad)" />
+          <path d="M12 7V17M7 12H17" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M8 8L16 16M16 8L8 16" stroke="white" stroke-width="2" opacity="0.3" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="logo-grad" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#4F46E5"/>
+              <stop offset="1" stop-color="#06B6D4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <h1 class="logo-text">CalCal <span class="logo-badge">칼칼</span></h1>
+      </div>
+
+      <nav class="header-nav">
+        <!-- Theme Switcher -->
+        <button id="theme-toggle" class="icon-btn" aria-label="다크 모드 전환">
+          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+
+        <!-- User Profile Area -->
+        <div id="user-profile" class="user-profile-widget hidden">
+          <div class="user-avatar-small" id="user-avatar-placeholder"></div>
+          <span class="user-name" id="header-username">학습자 1</span>
+          <button id="logout-btn" class="text-btn">로그아웃</button>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main class="app-main">
+
+    <!-- 1. LOGIN SCREEN -->
+    <section id="login-view" class="view-panel active-view">
+      <div class="login-card glass-panel">
+        <h2 class="login-title">환영합니다! 👋</h2>
+        <p class="login-subtitle">공부할 학습자 카드를 선택한 후 로그인해 주세요.</p>
+        
+        <div class="user-card-grid">
+          <!-- Student 1 Card -->
+          <button type="button" class="student-card" data-student="학습자 1">
+            <div class="avatar-container avatar-bg-1">
+              <span class="avatar-emoji">🦊</span>
+            </div>
+            <h3 class="student-name">학습자 1</h3>
+            <span class="student-status">준비 완료</span>
+          </button>
+          
+          <!-- Student 2 Card -->
+          <button type="button" class="student-card" data-student="학습자 2">
+            <div class="avatar-container avatar-bg-2">
+              <span class="avatar-emoji">🐨</span>
+            </div>
+            <h3 class="student-name">학습자 2</h3>
+            <span class="student-status">준비 완료</span>
+          </button>
+        </div>
+
+        <button id="login-action-btn" class="primary-btn wide-btn" disabled>학습 시작하기</button>
+      </div>
+    </section>
+
+    <!-- 2. DASHBOARD SCREEN -->
+    <section id="dashboard-view" class="view-panel hidden">
+      <div class="dashboard-grid">
+        
+        <!-- Control Card: Academic Selection -->
+        <div class="dashboard-card glass-panel col-span-2">
+          <div class="card-header">
+            <h2 class="card-title">학습 설정 및 진도</h2>
+            <div class="academic-filters">
+              <div class="select-group">
+                <label for="grade-select">학년</label>
+                <select id="grade-select">
+                  <option value="1">초등 1학년</option>
+                  <option value="2">초등 2학년</option>
+                  <option value="3">초등 3학년</option>
+                  <option value="4">초등 4학년</option>
+                  <option value="5">초등 5학년</option>
+                  <option value="6" selected>초등 6학년</option>
+                </select>
+              </div>
+
+              <div class="select-group">
+                <label for="semester-select">학기</label>
+                <select id="semester-select">
+                  <option value="1">1학기</option>
+                  <option value="2" selected>2학기</option>
+                </select>
+              </div>
+
+              <div class="select-group">
+                <label for="month-select">월별 학습</label>
+                <select id="month-select">
+                  <option value="9" selected>9월 (분수 나눗셈)</option>
+                  <option value="10">10월 (소수 나눗셈)</option>
+                  <option value="11">11월 (비례배분)</option>
+                  <option value="12">12월 (원주의 계산)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="curriculum-desc" id="curriculum-description">
+            <strong class="highlight-label">💡 이번 달 연산 학습 분야:</strong>
+            <span id="curriculum-text">불러오는 중...</span>
+          </div>
+        </div>
+
+        <!-- Quick Stats Card -->
+        <div class="dashboard-card glass-panel flex-row-stats col-span-2">
+          <div class="stat-box">
+            <span class="stat-label">총 푼 문제수</span>
+            <span class="stat-value" id="stat-total-solved">0</span>
+            <span class="stat-trend trend-neutral">누적 기록</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-box">
+            <span class="stat-label">평균 정답률</span>
+            <span class="stat-value" id="stat-avg-accuracy">0%</span>
+            <span class="stat-trend" id="stat-accuracy-trend">-</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-box">
+            <span class="stat-label">평균 풀이 시간</span>
+            <span class="stat-value" id="stat-avg-time">0.0초</span>
+            <span class="stat-trend" id="stat-time-trend">-</span>
+          </div>
+        </div>
+
+        <!-- Math Area Proficiency Card -->
+        <div class="dashboard-card glass-panel">
+          <h3 class="card-title">분야별 학습 수준</h3>
+          <p class="card-subtitle">최근 정답률에 따라 상·중·하 난이도가 자동 조절됩니다.</p>
+          <div class="proficiency-list" id="proficiency-container">
+            <!-- Dynamically populated -->
+            <div class="loading-spinner-small"></div>
+          </div>
+        </div>
+
+        <!-- Analytics Visual Curve -->
+        <div class="dashboard-card glass-panel">
+          <h3 class="card-title">성장 분석 그래프</h3>
+          <p class="card-subtitle">최근 15회의 정답률과 속도(초)의 상관 관계 추이</p>
+          <div class="chart-container">
+            <canvas id="analytics-chart" width="400" height="200"></canvas>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-color color-acc"></span>정답률 (%)</span>
+              <span class="legend-item"><span class="legend-color color-speed"></span>풀이 시간 (초)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Big Launch CTA -->
+        <div class="dashboard-card glass-panel col-span-2 start-learning-panel">
+          <div class="cta-content">
+            <h3 class="cta-title">오늘의 연산 훈련을 시작해 볼까요? ⚡️</h3>
+            <p class="cta-subtitle">빠른 속도와 높은 정확도로 기록에 도전해 보세요! 동기부여를 위한 분석 리포트가 즉각 갱신됩니다.</p>
+          </div>
+          <button id="start-learning-btn" class="primary-btn pulse-glow">연산 트레이닝 시작! 🚀</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3. IMMERSIVE QUIZ SCREEN -->
+    <section id="quiz-view" class="view-panel hidden">
+      <div class="quiz-container">
+        
+        <!-- Quiz Control Header -->
+        <div class="quiz-header">
+          <button id="exit-quiz-btn" class="icon-text-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="btn-icon"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            대시보드 나가기
+          </button>
+          
+          <div class="quiz-meta">
+            <span class="quiz-badge badge-area" id="quiz-area-label">나눗셈</span>
+            <span class="quiz-badge badge-diff" id="quiz-diff-label">난이도: 하</span>
+          </div>
+
+          <div class="stopwatch" id="stopwatch-display">⏱️ 00.0초</div>
+        </div>
+
+        <!-- Immersive Question and Input Block -->
+        <div class="quiz-core glass-panel" id="quiz-card">
+          <div class="question-count-tracker" id="quiz-progress-text">연산 트레이닝 중</div>
+          
+          <!-- Large Math Formula Display -->
+          <div class="math-question" id="math-expression">2/5 ÷ 3 = ?</div>
+
+          <!-- Answer Input Field -->
+          <div class="answer-field-group">
+            <input type="text" id="quiz-answer-input" autocomplete="off" placeholder="답을 입력하세요" readonly>
+            <span class="input-focus-line"></span>
+          </div>
+
+          <div class="quiz-tip">
+            <span>💡 <strong>연산 꿀팁:</strong> 정답은 소수(예: 0.2) 또는 분수(예: 2/10) 둘 다 완벽 지원됩니다.</span>
+          </div>
+        </div>
+
+        <!-- Custom Immersive Virtual Keyboard -->
+        <div class="virtual-keypad">
+          <button class="key-btn" data-key="1">1</button>
+          <button class="key-btn" data-key="2">2</button>
+          <button class="key-btn" data-key="3">3</button>
+          
+          <button class="key-btn" data-key="4">4</button>
+          <button class="key-btn" data-key="5">5</button>
+          <button class="key-btn" data-key="6">6</button>
+          
+          <button class="key-btn" data-key="7">7</button>
+          <button class="key-btn" data-key="8">8</button>
+          <button class="key-btn" data-key="9">9</button>
+          
+          <button class="key-btn" data-key=".">.</button>
+          <button class="key-btn" data-key="0">0</button>
+          <button class="key-btn" data-key="/">/</button>
+          
+          <button class="key-btn key-action-backspace col-span-1" data-key="Backspace" aria-label="지우기">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM18 9l-6 6M12 9l6 6"/></svg>
+          </button>
+          <button class="key-btn key-action-enter col-span-2" id="key-action-submit" data-key="Enter">정답 입력 ⚡️</button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>&copy; 2026 CalCal. 초등학교 수학 연산 향상 프로젝트. Powered by Supabase & Netlify.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
