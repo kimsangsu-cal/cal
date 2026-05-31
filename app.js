@@ -1351,6 +1351,7 @@ async function updateDashboardData() {
 async function startQuiz() {
   state.quizActive = true;
   state.questionIndex = 1;
+  document.body.classList.add('quiz-active');
   
   // Set up immersive views
   navigateTo('quiz-view');
@@ -1504,6 +1505,7 @@ async function submitAnswer() {
 function exitQuiz() {
   state.quizActive = false;
   if (state.timerInterval) clearInterval(state.timerInterval);
+  document.body.classList.remove('quiz-active');
   
   // Redraw dashboard stats
   updateDashboardData();
