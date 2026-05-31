@@ -867,7 +867,7 @@ async function generateAdaptiveQuestion(userName, grade, semester, month) {
     
     if (response.status === 200) {
       const records = await response.json();
-      console.log('Recent learning records retrieved:', records.length);
+      console.log('Recent learning records retrieved from Supabase:', records.length);
       
       if (records.length >= 3) {
         // Calculate correctness rate of the LATEST difficulty level in history
@@ -877,7 +877,7 @@ async function generateAdaptiveQuestion(userName, grade, semester, month) {
         if (matchingRecords.length >= 3) {
           const correctCount = matchingRecords.filter(r => r.is_correct).length;
           const correctRatio = correctCount / matchingRecords.length;
-          console.log(`Difficulty [${currentDiff}]: Correct ratio = ${correctRatio.toFixed(2)} (${correctCount}/${matchingRecords.length})`);
+          console.log(`Supabase Difficulty [${currentDiff}]: Correct ratio = ${correctRatio.toFixed(2)} (${correctCount}/${matchingRecords.length})`);
           
           if (correctRatio === 1.0) {
             // Promote difficulty
@@ -894,21 +894,29 @@ async function generateAdaptiveQuestion(userName, grade, semester, month) {
             recommendedDifficulty = currentDiff;
           }
         } else {
-          // Default to the latest difficulty tried
+          // Default to the latest difficulty tried (maintain state until 3 attempts are accumulated)
           recommendedDifficulty = currentDiff;
         }
       }
+    } else {
+      // Force entering the catch block for LocalStorage fallback if table is not ready in Supabase
+      throw new Error(`Supabase returned status ${response.status}`);
     }
   } catch (err) {
-    console.warn('Supabase fetch failed during adaptive check. Falling back to local storage analysis.', err);
-    // Local fallback check
-    const localHistory = getLocalHistory(userName).filter(r => r.area === area);
+    console.warn('Supabase fetch failed during adaptive check. Falling back to local storage analysis.', err.message);
+    
+    // Local fallback check (strictly sliced to latest 5 records to match API behavior)
+    const localHistory = getLocalHistory(userName).filter(r => r.area === area).slice(0, 5);
+    
     if (localHistory.length >= 3) {
       const currentDiff = localHistory[0].difficulty;
       const matching = localHistory.filter(r => r.difficulty === currentDiff);
+      
       if (matching.length >= 3) {
         const correctCount = matching.filter(r => r.is_correct).length;
         const correctRatio = correctCount / matching.length;
+        console.log(`Local Difficulty [${currentDiff}]: Correct ratio = ${correctRatio.toFixed(2)} (${correctCount}/${matching.length})`);
+        
         if (correctRatio === 1.0) {
           recommendedDifficulty = currentDiff === '하' ? '중' : (currentDiff === '중' ? '상' : '상');
         } else if (correctRatio < 0.6) {
@@ -916,6 +924,9 @@ async function generateAdaptiveQuestion(userName, grade, semester, month) {
         } else {
           recommendedDifficulty = currentDiff;
         }
+      } else {
+        // CRITICAL BUG FIX: Maintain the current difficulty level if we have < 3 records of it
+        recommendedDifficulty = currentDiff;
       }
     }
   }
@@ -1478,27 +1489,21 @@ async function submitAnswer() {
     splash.innerHTML = `
       <svg class="splash-icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       <div class="splash-text">아쉽습니다!</div>
-      <div style="font-size:0.9rem;margin-top:0.35rem">다시 도전해 보세요.</div>
+      <div style="font-size:0.9rem;margin-top:0.35rem">정답은 <strong>${correctAns}</strong> 입니다.</div>
     `;
     card.appendChild(splash);
     card.classList.add('shake');
 
-    // Remove shake & splash, allowing a retry on the exact same question!
+    // Save incorrect record to Database so the adaptive difficulty engine logs the attempt
+    await insertLearningRecord(record);
+
+    // Auto-advance to the NEXT question after 1.6 seconds
     setTimeout(() => {
       splash.remove();
       card.classList.remove('shake');
-      
-      // Resume stopwatch timer
-      state.timeStarted = performance.now() - state.timeSpentMs; // credit already elapsed time
-      const timerDisplay = document.getElementById('stopwatch-display');
-      state.timerInterval = setInterval(() => {
-        state.timeSpentMs = Math.round(performance.now() - state.timeStarted);
-        timerDisplay.textContent = `⏱️ ${(state.timeSpentMs / 1000).toFixed(1)}초`;
-      }, 100);
-      
-      input.value = '';
-      input.focus();
-    }, 1200);
+      state.questionIndex++;
+      loadNextQuestion();
+    }, 1600);
   }
 }
 
@@ -1510,6 +1515,66 @@ function exitQuiz() {
   // Redraw dashboard stats
   updateDashboardData();
   navigateTo('dashboard-view');
+}
+
+// Persistent Learner Settings (Grade/Semester/Month)
+function loadLearnerSettings(userName) {
+  const raw = localStorage.getItem(`calcal_settings_${userName}`);
+  if (raw) {
+    const settings = JSON.parse(raw);
+    state.currentGrade = settings.grade || 6;
+    state.currentSemester = settings.semester || 2;
+    state.currentMonth = settings.month || 9;
+  } else {
+    // Default fallback
+    state.currentGrade = 6;
+    state.currentSemester = 2;
+    state.currentMonth = 9;
+  }
+  
+  syncUISelects();
+}
+
+function saveLearnerSettings() {
+  if (!state.currentUser) return;
+  localStorage.setItem(`calcal_settings_${state.currentUser}`, JSON.stringify({
+    grade: state.currentGrade,
+    semester: state.currentSemester,
+    month: state.currentMonth
+  }));
+}
+
+function syncUISelects() {
+  const gradeSel = document.getElementById('grade-select');
+  const semSel = document.getElementById('semester-select');
+  const monthSel = document.getElementById('month-select');
+  
+  if (!gradeSel || !semSel || !monthSel) return;
+  
+  gradeSel.value = String(state.currentGrade);
+  semSel.value = String(state.currentSemester);
+  
+  // Populate months options based on semester
+  const sem = semSel.value;
+  monthSel.innerHTML = '';
+  if (sem === '1') {
+    monthSel.innerHTML = `
+      <option value="3">3월</option>
+      <option value="4">4월</option>
+      <option value="5">5월</option>
+      <option value="6">6월</option>
+      <option value="7">7월</option>
+    `;
+  } else {
+    monthSel.innerHTML = `
+      <option value="9">9월</option>
+      <option value="10">10월</option>
+      <option value="11">11월</option>
+      <option value="12">12월</option>
+    `;
+  }
+  
+  monthSel.value = String(state.currentMonth);
 }
 
 // 10. Application Initializer
@@ -1536,6 +1601,9 @@ function initApp() {
   loginBtn.addEventListener('click', () => {
     if (!selectedStudent) return;
     state.currentUser = selectedStudent;
+    
+    // Load persisted settings for this specific learner
+    loadLearnerSettings(selectedStudent);
     
     showToast(`${selectedStudent}님, 환영합니다! 🚀`, 'success');
     
@@ -1584,16 +1652,19 @@ function initApp() {
     updateMonths();
     state.currentSemester = parseInt(semSel.value);
     state.currentMonth = parseInt(monthSel.value);
+    saveLearnerSettings();
     updateDashboardData();
   });
 
   gradeSel.addEventListener('change', () => {
     state.currentGrade = parseInt(gradeSel.value);
+    saveLearnerSettings();
     updateDashboardData();
   });
 
   monthSel.addEventListener('change', () => {
     state.currentMonth = parseInt(monthSel.value);
+    saveLearnerSettings();
     updateDashboardData();
   });
 
