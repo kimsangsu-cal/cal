@@ -1063,6 +1063,31 @@ function saveLocalHistory(userName, record) {
 }
 
 // 6. Growth Chart Dashboard Renderer (Canvas API - Daily Averages & Difficulty Summaries)
+function updateChartAreaFilterOptions(history) {
+  const areaFilter = document.getElementById('chart-area-filter');
+  if (!areaFilter) return;
+
+  const currentVal = areaFilter.value || 'all';
+
+  // Get unique non-empty areas from history
+  const uniqueAreas = [...new Set(history.map(r => r.area))].filter(Boolean);
+
+  areaFilter.innerHTML = '<option value="all">전체 분야</option>';
+  uniqueAreas.forEach(area => {
+    const opt = document.createElement('option');
+    opt.value = area;
+    opt.textContent = area;
+    areaFilter.appendChild(opt);
+  });
+
+  if (uniqueAreas.includes(currentVal)) {
+    areaFilter.value = currentVal;
+  } else {
+    areaFilter.value = 'all';
+  }
+}
+
+// 6. Growth Chart Dashboard Renderer (Canvas API - Daily Averages & Difficulty Summaries)
 function renderGrowthChart(history) {
   const canvas = document.getElementById('analytics-chart');
   if (!canvas) return;
@@ -1073,7 +1098,20 @@ function renderGrowthChart(history) {
   
   ctx.clearRect(0, 0, width, height);
 
-  // Group by difficulty and display in the container
+  // Read filter values
+  const areaFilterVal = document.getElementById('chart-area-filter')?.value || 'all';
+  const diffFilterVal = document.getElementById('chart-diff-filter')?.value || 'all';
+
+  // Filter history for chart trend line calculations
+  let filteredHistory = history;
+  if (areaFilterVal !== 'all') {
+    filteredHistory = filteredHistory.filter(r => r.area === areaFilterVal);
+  }
+  if (diffFilterVal !== 'all') {
+    filteredHistory = filteredHistory.filter(r => r.difficulty === diffFilterVal);
+  }
+
+  // Group by difficulty and display in the container (always use overall history for summary cards)
   const diffs = ['하', '중', '상'];
   const diffStatsContainer = document.getElementById('difficulty-summary-stats');
   if (diffStatsContainer) {
@@ -1100,20 +1138,20 @@ function renderGrowthChart(history) {
   }
 
   // If no history, draw background placeholder
-  if (!history || history.length === 0) {
+  if (!filteredHistory || filteredHistory.length === 0) {
     ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
     ctx.font = '500 14px Noto Sans KR';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('문제를 풀면 여기에 성장 그래프가 그려집니다!', width / 2, height / 2);
+    ctx.fillText('선택한 조건의 연산 연습 기록이 없습니다.', width / 2, height / 2);
     return;
   }
 
   // Group records by Date (local timezone)
   const dailyGroups = {};
-  history.forEach(r => {
+  filteredHistory.forEach(r => {
     const dateObj = new Date(r.created_at);
-    const label = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`; // format like "5/31"
+    const label = isNaN(dateObj.getTime()) ? 'N/A' : `${dateObj.getMonth() + 1}/${dateObj.getDate()}`; // format like "5/31"
     
     if (!dailyGroups[label]) {
       dailyGroups[label] = {
@@ -1383,6 +1421,7 @@ async function updateDashboardData() {
   }
 
   // 3. Render Canvas Curve
+  updateChartAreaFilterOptions(state.historyCache);
   renderGrowthChart(state.historyCache);
 
   // 4. Load curriculum details
@@ -1527,7 +1566,8 @@ async function submitAnswer() {
     correct_answer: correctAns,
     user_answer: userAns,
     is_correct: isCorrect,
-    time_spent_ms: timeTaken
+    time_spent_ms: timeTaken,
+    created_at: new Date().toISOString()
   };
 
   // Show Splash animations on top of Card
@@ -1545,11 +1585,19 @@ async function submitAnswer() {
     
     // Save to Database
     await insertLearningRecord(record);
+    state.historyCache.unshift(record); // Prepend to cache immediately
+
+    // Check if 10 consecutive correct answers in '상' difficulty
+    const shouldAdvance = checkAndAdvanceCurriculum(record);
 
     // Auto-advance after 1.2s
     setTimeout(() => {
       splash.remove();
-      state.questionIndex++;
+      if (shouldAdvance) {
+        advanceToNextCurriculumStep();
+      } else {
+        state.questionIndex++;
+      }
       loadNextQuestion();
     }, 1200);
     
@@ -1565,6 +1613,7 @@ async function submitAnswer() {
 
     // Save incorrect record to Database so the adaptive difficulty engine logs the attempt
     await insertLearningRecord(record);
+    state.historyCache.unshift(record); // Prepend to cache immediately
 
     // Auto-advance to the NEXT question after 1.6 seconds
     setTimeout(() => {
@@ -1574,6 +1623,87 @@ async function submitAnswer() {
       loadNextQuestion();
     }, 1600);
   }
+}
+
+// Check if user has 10 consecutive correct answers in '상' difficulty for the current curriculum step
+function checkAndAdvanceCurriculum(record) {
+  if (record.difficulty !== '상' || !record.is_correct) {
+    return false;
+  }
+
+  // Filter local history cache for the current user, grade, semester, and month
+  const matching = state.historyCache.filter(r => 
+    r.user_name === record.user_name &&
+    r.grade === record.grade &&
+    r.semester === record.semester &&
+    r.month === record.month
+  );
+
+  if (matching.length < 10) {
+    return false;
+  }
+
+  // Take the 10 most recent records for this month's curriculum
+  const recent10 = matching.slice(0, 10);
+  
+  // Check if they are all '상' difficulty AND correct
+  const allHighAndCorrect = recent10.every(r => r.difficulty === '상' && r.is_correct);
+
+  if (allHighAndCorrect) {
+    console.log(`User got 10 consecutive correct answers on '상' for Grade ${record.grade}, Semester ${record.semester}, Month ${record.month}!`);
+    return true;
+  }
+
+  return false;
+}
+
+// Automatically advance user to the next month's (or next semester's/grade's) curriculum step
+function advanceToNextCurriculumStep() {
+  const monthsS1 = [3, 4, 5, 6, 7];
+  const monthsS2 = [9, 10, 11, 12];
+  
+  let g = state.currentGrade;
+  let s = state.currentSemester;
+  let m = state.currentMonth;
+  
+  if (s === 1) {
+    const idx = monthsS1.indexOf(m);
+    if (idx !== -1 && idx < monthsS1.length - 1) {
+      m = monthsS1[idx + 1];
+    } else {
+      s = 2;
+      m = 9;
+    }
+  } else { // s === 2
+    const idx = monthsS2.indexOf(m);
+    if (idx !== -1 && idx < monthsS2.length - 1) {
+      m = monthsS2[idx + 1];
+    } else {
+      if (g < 6) {
+        g += 1;
+        s = 1;
+        m = 3;
+      } else {
+        showToast("축하합니다! 초등 6학년 과정까지 모든 연산 과정을 완료했습니다! 🎉", "success");
+        return false;
+      }
+    }
+  }
+  
+  state.currentGrade = g;
+  state.currentSemester = s;
+  state.currentMonth = m;
+  state.questionIndex = 1; // Reset question count for next curriculum step
+  
+  saveLearnerSettings();
+  syncUISelects();
+  
+  const key = getCurriculumKey(g, s, m);
+  const curr = curriculumMap[key];
+  if (curr) {
+    showToast(`축하합니다! ${g}학년 ${s}학기 ${m}월 과정(${curr.desc})으로 승급되었습니다! ⚡️`, "success");
+  }
+  return true;
 }
 
 function exitQuiz() {
@@ -1740,6 +1870,21 @@ function initApp() {
   // Quiz Control buttons
   document.getElementById('start-learning-btn').addEventListener('click', startQuiz);
   document.getElementById('exit-quiz-btn').addEventListener('click', exitQuiz);
+
+  // Chart Filter change listeners
+  const chartAreaFilter = document.getElementById('chart-area-filter');
+  const chartDiffFilter = document.getElementById('chart-diff-filter');
+  
+  if (chartAreaFilter) {
+    chartAreaFilter.addEventListener('change', () => {
+      renderGrowthChart(state.historyCache);
+    });
+  }
+  if (chartDiffFilter) {
+    chartDiffFilter.addEventListener('change', () => {
+      renderGrowthChart(state.historyCache);
+    });
+  }
 
   // Virtual Keyboard event delegation
   document.querySelectorAll('.key-btn').forEach(btn => {

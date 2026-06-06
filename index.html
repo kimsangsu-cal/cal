@@ -180,6 +180,23 @@
             </div>
           </div>
           <p class="card-subtitle">최근 학습일 기준 일별 평균 정답률과 속도 추이</p>
+          <div class="chart-filters-row">
+            <div class="select-group small-select">
+              <label for="chart-area-filter">연산 분야</label>
+              <select id="chart-area-filter">
+                <option value="all">전체 분야</option>
+              </select>
+            </div>
+            <div class="select-group small-select">
+              <label for="chart-diff-filter">난이도</label>
+              <select id="chart-diff-filter">
+                <option value="all">전체 난이도</option>
+                <option value="하">하</option>
+                <option value="중">중</option>
+                <option value="상">상</option>
+              </select>
+            </div>
+          </div>
           <div class="chart-container">
             <canvas id="analytics-chart" width="400" height="200"></canvas>
             <div class="chart-legend">
